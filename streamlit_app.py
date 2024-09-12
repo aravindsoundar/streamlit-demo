@@ -1,23 +1,65 @@
 import streamlit as st
-import numpy as np
-import time
+import pandas as pd
+import psycopg2
+import matplotlib.pyplot as plt
 
-progress_bar = st.sidebar.progress(0)
-status_text = st.sidebar.empty()
-last_rows = np.random.randn(1, 1)
-chart = st.line_chart(last_rows)
+# Load database connection details from secrets
+db_config = st.secrets["connections"]["postgresql"]
 
-for i in range(1, 101):
-    new_rows = last_rows[-1, :] + np.random.randn(5, 1).cumsum(axis=0)
-    status_text.text("%i%% Complete" % i)
-    chart.add_rows(new_rows)
-    progress_bar.progress(i)
-    last_rows = new_rows
-    time.sleep(0.05)
+# Establish connection to the PostgreSQL database
+def create_connection():
+    conn = psycopg2.connect(
+        dbname=db_config["database"],
+        user=db_config["username"],
+        password=db_config["password"],
+        host=db_config["host"],
+        port=db_config["port"]
+    )
+    return conn
 
-progress_bar.empty()
+# Query the stock data
+def load_data():
+    conn = create_connection()
+    query = "SELECT * FROM public.stockdata;"
+    df = pd.read_sql(query, conn)
+    conn.close()
+    return df
 
-# Streamlit widgets automatically run the script from top to bottom. Since
-# this button is not connected to any other logic, it just causes a plain
-# rerun.
-st.button("Re-run")
+# Main application
+st.title("Stock Data Analysis")
+
+# Load data
+data = load_data()
+
+# Display data
+if not data.empty:
+    st.write("### Stock Data", data)
+
+    # Basic statistics
+    st.write("### Basic Statistics")
+    st.write(data.describe())
+
+    # Plotting
+    st.write("### Closing Price Over Time")
+    plt.figure(figsize=(10, 5))
+    plt.plot(data['date'], data['close'], marker='o')
+    plt.title('Closing Price Over Time')
+    plt.xlabel('Date')
+    plt.ylabel('Closing Price')
+    plt.xticks(rotation=45)
+    plt.grid()
+    st.pyplot(plt)
+
+    # Volume Analysis
+    st.write("### Volume Over Time")
+    plt.figure(figsize=(10, 5))
+    plt.bar(data['date'], data['volume'], color='orange')
+    plt.title('Volume Over Time')
+    plt.xlabel('Date')
+    plt.ylabel('Volume')
+    plt.xticks(rotation=45)
+    plt.grid()
+    st.pyplot(plt)
+
+else:
+    st.write("No data available.")
