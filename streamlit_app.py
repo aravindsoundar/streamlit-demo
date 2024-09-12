@@ -4,14 +4,40 @@ import psycopg2
 import matplotlib.pyplot as plt
 
 # Load database connection details from secrets
-conn = st.connection("postgresql", type="sql")
-query = 'SELECT * FROM public.stockdata;'
-df = conn.query(query, ttl="10m")
+db_config = st.secrets["connections"]["postgresql"]
+
+# Establish connection to the PostgreSQL database
+def create_connection():
+    try:
+        conn = psycopg2.connect(
+            dbname=db_config["database"],
+            user=db_config["username"],
+            password=db_config["password"],
+            host=db_config["host"],
+            port=db_config["port"]
+        )
+        return conn
+    except Exception as e:
+        st.error(f"Error connecting to the database: {e}")
+        return None
+
+# Query the stock data
+def load_data():
+    conn = create_connection()
+    if conn is not None:
+        query = "SELECT * FROM public.stockdata;"
+        df = pd.read_sql(query, conn)
+        conn.close()  # Ensure the connection is closed after the query
+        return df
+    else:
+        return pd.DataFrame()  # Return an empty DataFrame if connection failed
+
 # Main application
 st.title("Stock Data Analysis")
 
 # Load data
-data = df
+data = load_data()
+
 # Display data
 if not data.empty:
     st.write("### Stock Data", data)
